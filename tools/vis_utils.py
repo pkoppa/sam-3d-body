@@ -151,3 +151,23 @@ def visualize_sample_together(img_cv2, outputs, faces):
     cur_img = np.concatenate([img_cv2, img_keypoints, img_mesh, img_mesh_side], axis=1)
 
     return cur_img
+
+
+def visualize_keypoints_only(img_cv2, outputs):
+    img_keypoints = img_cv2.copy()
+
+    for person_output in outputs:
+        keypoints_2d = person_output["pred_keypoints_2d"]
+        keypoints_2d = np.concatenate(
+            [keypoints_2d, np.ones((keypoints_2d.shape[0], 1))], axis=-1
+        )
+        img_keypoints = visualizer.draw_skeleton(img_keypoints, keypoints_2d)
+        img_keypoints = cv2.rectangle(
+            img_keypoints,
+            (int(person_output["bbox"][0]), int(person_output["bbox"][1])),
+            (int(person_output["bbox"][2]), int(person_output["bbox"][3])),
+            (0, 255, 0),
+            2,
+        )
+
+    return np.concatenate([img_cv2, img_keypoints], axis=1)

@@ -1,7 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import argparse
 import os
-from glob import glob
+from pathlib import Path
 
 import pyrootutils
 
@@ -16,7 +16,11 @@ import cv2
 import numpy as np
 import torch
 from sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
-from tools.vis_utils import visualize_sample, visualize_sample_together
+from tools.vis_utils import (
+    visualize_keypoints_only,
+    visualize_sample,
+    visualize_sample_together,
+)
 from tqdm import tqdm
 
 
@@ -67,22 +71,19 @@ def main(args):
         fov_estimator=fov_estimator,
     )
 
-    image_extensions = [
-        "*.jpg",
-        "*.jpeg",
-        "*.png",
-        "*.gif",
-        "*.bmp",
-        "*.tiff",
-        "*.webp",
-    ]
+    image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp"}
     images_list = sorted(
-        [
-            image
-            for ext in image_extensions
-            for image in glob(os.path.join(args.image_folder, ext))
-        ]
+        str(path)
+        for path in Path(args.image_folder).iterdir()
+        if path.is_file() and path.suffix.lower() in image_extensions
     )
+
+    if not images_list:
+        print(
+            f"No supported images found in {args.image_folder}. "
+            "Supported extensions: jpg, jpeg, png, gif, bmp, tiff, webp"
+        )
+        return
 
     for image_path in tqdm(images_list):
         outputs = estimator.process_one_image(
@@ -92,9 +93,17 @@ def main(args):
         )
 
         img = cv2.imread(image_path)
-        rend_img = visualize_sample_together(img, outputs, estimator.faces)
+        try:
+            rend_img = visualize_sample_together(img, outputs, estimator.faces)
+        except Exception as exc:
+            print(
+                "Mesh rendering failed. Falling back to 2D keypoint visualization. "
+                f"Original error: {exc}"
+            )
+            rend_img = visualize_keypoints_only(img, outputs)
+        image_name = os.path.splitext(os.path.basename(image_path))[0]
         cv2.imwrite(
-            f"{output_folder}/{os.path.basename(image_path)[:-4]}.jpg",
+            f"{output_folder}/{image_name}.jpg",
             rend_img.astype(np.uint8),
         )
 
